@@ -1,0 +1,33 @@
+# Docker Security Scanner Configuration
+
+scanner:
+  # Severity levels to report
+  severity_levels:
+    - CRITICAL
+    - HIGH
+    - MEDIUM
+    - LOW
+  
+  # Ignore these CVEs (known false positives)
+  ignore_cves: []
+
+auto_fix:
+  # Enable auto-fix suggestions
+  enabled: true
+  
+  # Base image upgrade recommendations
+  base_image_upgrades:
+    ubuntu:18.04: ubuntu:22.04
+    ubuntu:20.04: ubuntu:22.04
+    alpine:3.12: alpine:3.19
+    alpine:3.13: alpine:3.19
+    node:14: node:20
+    node:16: node:20
+    python:3.7: python:3.11
+    python:3.8: python:3.11
+    nginx:1.18: nginx:1.25
+    nginx:1.19: nginx:1.25
+
+report:
+  output_file: security_report.html
+  show_fixed_suggestions: true

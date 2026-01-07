@@ -1,0 +1,85 @@
+
+name: Docker Security Scan
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'Dockerfile'
+      - '**/Dockerfile'
+
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'Dockerfile'
+      - '**/Dockerfile'
+
+  schedule:
+    - cron: '0 9 * * *'
+
+  workflow_dispatch:
+    inputs:
+      image_name:
+        description: 'Docker image to scan'
+        required: true
+        default: 'nginx:latest'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  scan-and-fix:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Trivy
+        run: |
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update && sudo apt-get install -y trivy
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Scan image
+        id: scan
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            IMAGE="${{ github.event.inputs.image_name }}"
+          else
+            IMAGE=$(grep -E "^FROM " Dockerfile | head -1 | awk '{print $2}')
+          fi
+
+          echo "image=$IMAGE" >> $GITHUB_OUTPUT
+          set +e
+          python main.py "$IMAGE" --validate > scan_output.txt 2>&1
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+          set -e
+          cat scan_output.txt
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-security-scan
+          path: |
+            security_report.html
+            Dockerfile.fixed
+            scan_output.txt
+          retention-days: 30
+
+      - name: Create Pull Request (if fixes exist)
+        if: github.event_name != 'pull_request' && steps.scan.outputs.exit_code != '0'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          title: "🔒 Security: Docker vulnerability fixes"
+          commit-message: "security: apply docker vulnerability fixes"
+          branch: security/docker-fix
+          delete-branch: true

@@ -165,6 +165,47 @@ docker-security-scanner/
 ├── main.py
 ├── requirements.txt
 └── README.md
+
+## 🧱 Architecture Diagram
+
+The following diagram illustrates the end-to-end flow of the Docker Security Scanner,
+from image detection to vulnerability remediation and reporting.
+
+![Architecture Diagram](architecture/docker-security-scanner-architecture.png)
+User / Developer
+      |
+      v
+CLI (main.py)
+      |
+      v
+Image Scanner (Trivy)
+      |
+      v
+Vulnerability Analyzer
+      |
+      +-------------------+
+      |                   |
+      v                   v
+Dockerfile Fixer     Report Generator
+      |                   |
+      v                   v
+Image Builder       HTML / CSV Report
+      |
+      v
+Before vs After Validation
+
+
+### Flow Explanation
+1. User triggers scan via CLI or GitHub Actions
+2. Scanner uses Trivy to detect vulnerabilities
+3. Analyzer classifies CVEs by severity
+4. Fixer generates a hardened Dockerfile
+5. Image Builder validates fixes by rebuilding
+6. Report Generator produces interactive HTML & CSV reports
+7. CI/CD automation creates PRs with fixes
+
+
+
 🎯 Real-World Use Cases
 DevSecOps pipelines
 

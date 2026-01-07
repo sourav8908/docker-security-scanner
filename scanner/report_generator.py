@@ -5,19 +5,20 @@ import html
 
 class ReportGenerator:
     """
-    Generates interactive HTML security reports
-    with per-container (image) drill-down,
-    before/after comparison, and CSV export.
+    Interactive HTML security report with:
+    - Per-image drill-down
+    - Before/After validation (per image)
+    - CSV export
     """
 
     def __init__(self, scan_results, vulnerabilities, comparison=None):
         self.scan_results = scan_results
         self.vulnerabilities = vulnerabilities
-        self.comparison = comparison
+        self.comparison = comparison or {}
 
     def generate_html_report(self, output_file='security_report.html'):
         vuln_json = json.dumps(self.vulnerabilities)
-        comparison_json = json.dumps(self.comparison) if self.comparison else "null"
+        comparison_json = json.dumps(self.comparison)
 
         html_content = f"""
 <!DOCTYPE html>
@@ -26,7 +27,6 @@ class ReportGenerator:
 <meta charset="UTF-8">
 <title>Docker Security Scan Report</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
@@ -54,8 +54,8 @@ th {{ background:#333; color:white }}
   margin:15px 0;
   display:flex;
   gap:10px;
-  flex-wrap:wrap;
   align-items:center;
+  flex-wrap:wrap;
 }}
 
 .pagination {{ margin-top:10px; text-align:center }}
@@ -116,12 +116,8 @@ button {{ padding:6px 12px; cursor:pointer }}
 <table>
 <thead>
 <tr>
-<th>Image</th>
-<th>CVE</th>
-<th>Severity</th>
-<th>Package</th>
-<th>Installed</th>
-<th>Fixed</th>
+<th>Image</th><th>CVE</th><th>Severity</th>
+<th>Package</th><th>Installed</th><th>Fixed</th>
 </tr>
 </thead>
 <tbody id="table"></tbody>
@@ -135,7 +131,8 @@ const comparison = {comparison_json};
 
 let page = 1;
 const size = 10;
-let chart = null;
+let summaryChart = null;
+let compareChart = null;
 
 // Populate image dropdown
 const imageFilter = document.getElementById("imageFilter");
@@ -152,32 +149,60 @@ function getFilteredData() {{
   const img = document.getElementById("imageFilter").value;
 
   return vulns.filter(v => {{
-    const sevMatch = sev === "ALL" || v.severity === sev;
-    const imgMatch = img === "ALL" || v.image === img;
-    return sevMatch && imgMatch;
+    const s = sev === "ALL" || v.severity === sev;
+    const i = img === "ALL" || v.image === img;
+    return s && i;
   }});
 }}
 
 function updateSummary(data) {{
-  const count = {{CRITICAL:0, HIGH:0, MEDIUM:0, LOW:0}};
-  data.forEach(v => count[v.severity]++);
+  const c = {{CRITICAL:0, HIGH:0, MEDIUM:0, LOW:0}};
+  data.forEach(v => c[v.severity]++);
 
-  document.getElementById("sumCritical").innerText = count.CRITICAL;
-  document.getElementById("sumHigh").innerText = count.HIGH;
-  document.getElementById("sumMedium").innerText = count.MEDIUM;
-  document.getElementById("sumLow").innerText = count.LOW;
-  document.getElementById("sumTotal").innerText = data.length;
+  sumCritical.innerText = c.CRITICAL;
+  sumHigh.innerText = c.HIGH;
+  sumMedium.innerText = c.MEDIUM;
+  sumLow.innerText = c.LOW;
+  sumTotal.innerText = data.length;
 
-  if (chart) chart.destroy();
-  chart = new Chart(document.getElementById("summaryChart"), {{
+  if (summaryChart) summaryChart.destroy();
+  summaryChart = new Chart(summaryChartCanvas, {{
     type: "bar",
     data: {{
       labels: ["CRITICAL","HIGH","MEDIUM","LOW"],
       datasets: [{{
         label: "Vulnerabilities",
-        data: [count.CRITICAL, count.HIGH, count.MEDIUM, count.LOW],
+        data: [c.CRITICAL, c.HIGH, c.MEDIUM, c.LOW],
         backgroundColor: ["red","orange","gold","green"]
       }}]
+    }}
+  }});
+}}
+
+function updateComparison(image) {{
+  if (!comparison[image]) {{
+    comparisonSection.style.display = "none";
+    if (compareChart) compareChart.destroy();
+    return;
+  }}
+
+  const c = comparison[image];
+  comparisonSection.style.display = "block";
+
+  cCrit.innerText = c.reduction_percentage.critical + "%";
+  cHigh.innerText = c.reduction_percentage.high + "%";
+  cMed.innerText = c.reduction_percentage.medium + "%";
+  cLow.innerText = c.reduction_percentage.low + "%";
+
+  if (compareChart) compareChart.destroy();
+  compareChart = new Chart(compareChartCanvas, {{
+    type: "bar",
+    data: {{
+      labels: ["CRITICAL","HIGH","MEDIUM","LOW"],
+      datasets: [
+        {{ label: "Before", data: Object.values(c.original), backgroundColor:"#aaa" }},
+        {{ label: "After", data: Object.values(c.fixed), backgroundColor:"#4caf50" }}
+      ]
     }}
   }});
 }}
@@ -188,10 +213,9 @@ function renderTable() {{
 
   const start = (page - 1) * size;
   const rows = data.slice(start, start + size);
-  const t = document.getElementById("table");
-  t.innerHTML = "";
+  table.innerHTML = "";
 
-  rows.forEach(v => t.innerHTML += `
+  rows.forEach(v => table.innerHTML += `
 <tr>
 <td>${{v.image}}</td>
 <td>${{v.cve_id}}</td>
@@ -205,48 +229,37 @@ function renderTable() {{
 }}
 
 function renderPages(total) {{
-  const pages = Math.ceil(total / size);
-  const c = document.getElementById("pagination");
-  c.innerHTML = "";
-  for (let i = 1; i <= pages; i++) {{
-    c.innerHTML += `<button onclick="go(${{i}})">${{i}}</button>`;
-  }}
+  pagination.innerHTML = "";
+  for (let i = 1; i <= Math.ceil(total / size); i++)
+    pagination.innerHTML += `<button onclick="go(${{i}})">${{i}}</button>`;
 }}
 
-function go(i) {{
-  page = i;
+function go(i) {{ page = i; renderTable(); }}
+
+imageFilter.onchange = () => {{
+  page = 1;
   renderTable();
-}}
+  updateComparison(imageFilter.value);
+}};
+severityFilter.onchange = () => {{ page = 1; renderTable(); }};
 
-document.getElementById("severityFilter").onchange = () => {{ page = 1; renderTable(); }};
-document.getElementById("imageFilter").onchange = () => {{ page = 1; renderTable(); }};
-
-// CSV Export
 function exportCSV() {{
   const data = getFilteredData();
   let csv = "Image,CVE,Severity,Package,Installed,Fixed\\n";
   data.forEach(v => {{
     csv += `${{v.image}},${{v.cve_id}},${{v.severity}},${{v.package_name}},${{v.installed_version}},${{v.fixed_version}}\\n`;
   }});
-
-  const blob = new Blob([csv], {{ type: "text/csv" }});
-  const url = window.URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url;
+  a.href = URL.createObjectURL(new Blob([csv], {{type:"text/csv"}}));
   a.download = "security_report.csv";
   a.click();
-  window.URL.revokeObjectURL(url);
 }}
 
-if (comparison) {{
-  document.getElementById("comparisonSection").style.display = "block";
-  document.getElementById("cCrit").innerText = comparison.reduction_percentage.critical + "%";
-  document.getElementById("cHigh").innerText = comparison.reduction_percentage.high + "%";
-  document.getElementById("cMed").innerText = comparison.reduction_percentage.medium + "%";
-  document.getElementById("cLow").innerText = comparison.reduction_percentage.low + "%";
-}}
+const summaryChartCanvas = document.getElementById("summaryChart");
+const compareChartCanvas = document.getElementById("compareChart");
 
 renderTable();
+updateComparison(images.length === 1 ? images[0] : "ALL");
 </script>
 
 </body>

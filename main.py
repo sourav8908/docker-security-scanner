@@ -41,9 +41,7 @@ def print_banner():
 
 
 def get_running_container_images():
-    """
-    Returns a list of unique images used by running containers
-    """
+    """Return unique images used by running containers"""
     try:
         result = subprocess.run(
             ["docker", "ps", "--format", "{{.Image}}"],
@@ -51,10 +49,7 @@ def get_running_container_images():
             text=True,
             check=True
         )
-        images = set(
-            line.strip() for line in result.stdout.splitlines() if line.strip()
-        )
-        return list(images)
+        return list({line.strip() for line in result.stdout.splitlines() if line.strip()})
     except Exception as e:
         print(f"{Fore.RED}❌ Failed to detect running containers: {e}{Style.RESET_ALL}")
         return []
@@ -72,18 +67,18 @@ def main():
     )
     parser.add_argument(
         '--scan-running',
-        help='Scan all images used by running containers',
-        action='store_true'
+        action='store_true',
+        help='Scan all images used by running containers'
     )
     parser.add_argument(
         '--output',
-        help='Output HTML report file',
-        default=None
+        default=None,
+        help='Output HTML report file'
     )
     parser.add_argument(
         '--validate',
-        help='Build fixed image and validate fixes (single image only)',
-        action='store_true'
+        action='store_true',
+        help='Build fixed image and validate fixes (single image only)'
     )
 
     args = parser.parse_args()
@@ -123,7 +118,7 @@ def main():
         }
 
         for image in images_to_scan:
-            print(f"\n{Fore.CYAN}🔍 Scanning image: {image}{Style.RESET_ALL}")
+            print(f"{Fore.CYAN}🔍 Scanning image: {image}{Style.RESET_ALL}")
             scan_result = scanner.scan_image(image)
 
             if not scan_result.get('success'):
@@ -131,21 +126,21 @@ def main():
                 continue
 
             vulns = analyzer.parse_trivy_results(scan_result['scan_data'])
-
             for v in vulns:
-                v['image'] = image  # tag vulnerability with image name
+                v['image'] = image
 
             all_vulnerabilities.extend(vulns)
 
         if not all_vulnerabilities:
-            print(f"{Fore.RED}❌ No vulnerabilities found or scans failed{Style.RESET_ALL}")
+            print(f"{Fore.RED}❌ No vulnerabilities found{Style.RESET_ALL}")
             sys.exit(1)
 
-        # ---------------- AUTO-FIX + VALIDATE (SINGLE IMAGE ONLY) ----------------
+        # ---------------- AUTO-FIX + VALIDATE ----------------
         comparison_data = None
 
         if not args.scan_running and config['auto_fix']['enabled']:
             summary = analyzer.get_summary(all_vulnerabilities)
+
             fixer = DockerfileFixer(
                 base_image_upgrades=config['auto_fix'].get('base_image_upgrades', {})
             )
@@ -158,7 +153,7 @@ def main():
 
             fixer.save_dockerfile(complete_fix['dockerfile'], 'Dockerfile.fixed')
 
-            print(f"\n{Fore.GREEN}✅ Dockerfile.fixed generated{Style.RESET_ALL}")
+            print(f"{Fore.GREEN}✅ Dockerfile.fixed generated{Style.RESET_ALL}")
             print(f"   Base image: {complete_fix['original_image']} → {complete_fix['base_image']}")
             print(f"   Expected reduction: ~{complete_fix['expected_reduction']}%")
 
@@ -172,13 +167,16 @@ def main():
                 if build_result.get('success'):
                     fixed_scan = builder.scan_image(build_result['image_name'])
                     if fixed_scan.get('success'):
-                        comparison_data = builder.compare_scans(
-                            summary,
-                            fixed_scan['summary']
-                        )
+                        # ✅ IMPORTANT: wrap comparison by image name
+                        comparison_data = {
+                            args.image: builder.compare_scans(
+                                summary,
+                                fixed_scan['summary']
+                            )
+                        }
 
         # ---------------- REPORT ----------------
-        print(f"\n{Fore.CYAN}📝 Generating security report...{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}📝 Generating security report...{Style.RESET_ALL}")
 
         report = ReportGenerator(
             scan_results=combined_scan_result,
@@ -190,7 +188,7 @@ def main():
         print(f"{Fore.GREEN}✅ Report generated: {output_file}{Style.RESET_ALL}")
 
     except Exception as e:
-        print(f"\n{Fore.RED}❌ Error: {e}{Style.RESET_ALL}")
+        print(f"{Fore.RED}❌ Error: {e}{Style.RESET_ALL}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

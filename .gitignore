@@ -1,0 +1,11 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Generated reports
+security_report.html
+security_report.csv
+
+# OS files
+.DS_Store
+Thumbs.db

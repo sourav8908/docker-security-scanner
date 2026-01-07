@@ -123,6 +123,32 @@ Uploads reports
 
 Creates Pull Requests automatically
 
+Proof of Working (Screenshots)
+🔍 Scan Summary Dashboard
+
+Shows vulnerability distribution across all scanned containers and images.
+
+![Scan Summary](screenshots/scan-summary.png)
+
+🔄 Before vs After Validation
+
+Automatically generated comparison after applying fixes.
+
+![Before vs After Validation](screenshots/before-after.png)
+
+🐳 Per-Container Vulnerability Drill-Down
+
+Filter vulnerabilities by running container image.
+
+![Per Container View](screenshots/container-filter.png)
+
+📄 CSV Export for Compliance & Audits
+
+One-click export for security teams.
+
+![CSV Export](screenshots/csv-export.png)
+
+
 📁 Project Structure
 arduino
 Copy code

@@ -1,0 +1,11 @@
+
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║        🔒  DOCKER SECURITY SCANNER  🔒                       ║
+║                                                              ║
+║           Scan images, find vulnerabilities,                ║
+║           and auto-generate fixes                           ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+
+❌ Image name required unless --scan-running is used
